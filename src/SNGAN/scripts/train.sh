@@ -14,59 +14,59 @@ conda activate GAN1
 
 #--------- balanced SNGAN training -----------------
 
-for density in 0.05 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9
-do
-  python train.py --model sngan_cifar10 --exp-name sngan_cifar10_balanced --init-path initial_weights \
-  --sparse --balanced --sparse_init ERK --density $density --update_frequency 4000 --random_seed 1
-done
-
-for density in 0.05 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9
-do
-  python train.py --model sngan_cifar10 --exp-name sngan_cifar10_balanced --init-path initial_weights \
-  --sparse --balanced --sparse_init ERK --density $density --update_frequency 4000 --random_seed 2
-done
-
-for density in 0.05 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9
-do
-  python train.py --model sngan_cifar10 --exp-name sngan_cifar10_balanced --init-path initial_weights \
-  --sparse --balanced --sparse_init ERK --density $density --update_frequency 4000 --random_seed 3
-done
-
-#--------- unbalanced SNGAN training (static)-----------------
-for densityG in 0.02 0.05 0.1 0.2 0.3 0.4
-do
-  python train.py --model sngan_cifar10 --exp-name sngan_cifar10_unbalanced --init-path initial_weights \
-  --sparse --sparse_init ERK --density 0.3 --densityG $densityG --update_frequency 4000 --random_seed 1
-done
-
-for densityG in 0.02 0.05 0.1 0.2 0.3 0.4
-do
-  python train.py --model sngan_cifar10 --exp-name sngan_cifar10_unbalanced --init-path initial_weights \
-  --sparse --sparse_init ERK --density 0.3 --densityG $densityG --update_frequency 4000 --random_seed 2
-done
-
-for densityG in 0.02 0.05 0.1 0.2 0.3 0.4
-do
-  python train.py --model sngan_cifar10 --exp-name sngan_cifar10_unbalanced --init-path initial_weights \
-  --sparse --sparse_init ERK --density 0.3 --densityG $densityG --update_frequency 4000 --random_seed 3
-done
-
-
-#--------- unbalanced gan training (DST Ggradient Dgradient)-----------------
-for densityG in 0.05 0.1 0.2 0.3 0.4 0.5
-do
-  python train.py --model sngan_cifar10 --exp-name sngan_cifar10_unbalanced_DST_dynamic --init-path initial_weights \
-  --sparse --sparse_init ERK --density 0.3 --densityG $densityG --update_frequency 4000 \
-  --dy_mode --G_growth gradient --D_growth gradient
-done
+#for density in 0.05 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9
+#do
+#  python train.py --model sngan_cifar10 --exp-name sngan_cifar10_balanced --init-path initial_weights \
+#  --sparse --balanced --sparse_init ERK --density $density --update_frequency 4000 --random_seed 1
+#done
+#
+#for density in 0.05 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9
+#do
+#  python train.py --model sngan_cifar10 --exp-name sngan_cifar10_balanced --init-path initial_weights \
+#  --sparse --balanced --sparse_init ERK --density $density --update_frequency 4000 --random_seed 2
+#done
+#
+#for density in 0.05 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9
+#do
+#  python train.py --model sngan_cifar10 --exp-name sngan_cifar10_balanced --init-path initial_weights \
+#  --sparse --balanced --sparse_init ERK --density $density --update_frequency 4000 --random_seed 3
+#done
+#
+##--------- unbalanced SNGAN training (static)-----------------
+#for densityG in 0.02 0.05 0.1 0.2 0.3 0.4
+#do
+#  python train.py --model sngan_cifar10 --exp-name sngan_cifar10_unbalanced --init-path initial_weights \
+#  --sparse --sparse_init ERK --density 0.3 --densityG $densityG --update_frequency 4000 --random_seed 1
+#done
+#
+#for densityG in 0.02 0.05 0.1 0.2 0.3 0.4
+#do
+#  python train.py --model sngan_cifar10 --exp-name sngan_cifar10_unbalanced --init-path initial_weights \
+#  --sparse --sparse_init ERK --density 0.3 --densityG $densityG --update_frequency 4000 --random_seed 2
+#done
+#
+#for densityG in 0.02 0.05 0.1 0.2 0.3 0.4
+#do
+#  python train.py --model sngan_cifar10 --exp-name sngan_cifar10_unbalanced --init-path initial_weights \
+#  --sparse --sparse_init ERK --density 0.3 --densityG $densityG --update_frequency 4000 --random_seed 3
+#done
+#
 
 #--------- unbalanced gan training (DST Ggradient Drandom)-----------------
-for densityG in 0.05 0.1 0.2 0.3 0.4 0.5
+for fre in 500 2500 5000 10000 25000 40000 50000 75000
 do
-  python train.py --model sngan_cifar10 --exp-name sngan_cifar10_unbalanced_DST_random --init-path initial_weights \
-  --sparse --sparse_init ERK --density 0.3 --densityG $densityG --update_frequency 4000 \
-  --dy_mode --G_growth gradient --D_growth random
+  python train.py --model sngan_cifar10 --exp-name sngan_cifar10_unbalanced_DST_Ggradient_Drandom --init-path initial_weights \
+  --sparse --sparse_init ERK --density 0.3 --densityG 0.05 --update_frequency $fre \
+  --dy_mode --G_growth gradient --D_growth random --random_seed 1
 done
+
+#--------- unbalanced gan training (DST Ggradient Dgradient)-----------------
+#for densityG in 0.05 0.1 0.2 0.3 0.4 0.5
+#do
+#  python train.py --model sngan_cifar10 --exp-name sngan_cifar10_unbalanced_DST_Ggradient_Dgradient --init-path initial_weights \
+#  --sparse --sparse_init ERK --density 0.3 --densityG $densityG --update_frequency 4000 \
+#  --dy_mode --G_growth gradient --D_growth random
+#done
 
 conda deactivate
 
