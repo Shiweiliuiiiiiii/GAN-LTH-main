@@ -44,7 +44,7 @@ def main():
     # if you have downloaded and extracted
     #   http://download.tensorflow.org/models/image/imagenet/inception-2015-12-05.tgz
     # set this path to the directory where the extracted files are, otherwise
-    # just set it to None and the script will later download the files for you
+    # just set it to None and the scripts will later download the files for you
     inception_path = None
     print("check for inception model..", end=" ", flush=True)
     inception_path = fid.check_or_download_inception(inception_path)  # download inception if necessary

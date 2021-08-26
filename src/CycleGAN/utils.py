@@ -15,6 +15,22 @@ from torchvision.utils import save_image
 from datetime import datetime
 import dateutil.tz
 
+def name_from_config(opt):
+  name = '_'.join([
+  item for item in [
+  'sparse' if opt.sparse else 'dense',
+  'imbalanced' if opt.imbalanced and opt.sparse else None,
+  'density%1.4f' % opt.density if opt.sparse else None,
+  'densityG_%1.4f' % opt.densityG if opt.sparse else None,
+  'dy_%s' % opt.dy_mode if opt.sparse else None,
+  'D_growth_%s' % opt.D_growth if opt.dy_mode else None,
+  'G_growth_%s' % opt.G_growth if opt.dy_mode else None,
+  'fre_%d' % opt.update_frequency if opt.dy_mode else None,
+  ]
+  if item is not None])
+
+  return name
+
 def tensor2image(tensor):
     image = 127.5*(tensor[0].cpu().float().numpy() + 1.0)
     if image.shape[0] == 1:

@@ -166,18 +166,18 @@ class Masking(object):
     def step(self, global_steps=0, explore_mode='GD'):
         if 'G' in explore_mode:
             self.G_optimizer.step()
-            self.apply_mask(apply_mode='G')
+            self.apply_mask()
 
         if 'D' in explore_mode:
             self.D_optimizer.step()
-            self.apply_mask(apply_mode='D')
+            self.apply_mask()
             # DST decay
             self.death_rate_decay.step()
             self.death_rate = self.death_rate_decay.get_dr()
 
         if self.prune_every_k_steps is not None:
             if global_steps % self.prune_every_k_steps == 0 and global_steps > 0 and 'G' in explore_mode:
-                self.truncate_weights(dy_mode=self.dy_mode)
+                self.weight_exploration(dy_mode=self.dy_mode)
                 self.print_nonzero_counts(dy_mode=self.dy_mode)
                 self.fired_masks_update()
 
@@ -186,98 +186,31 @@ class Masking(object):
         self.D_model = D_model
 
         for name, tensor in self.G_model.named_parameters():
-            self.G_names.append(name)
-            self.G_masks[name] = torch.zeros_like(tensor,  requires_grad=False).cuda()
+            if len(tensor.size()) == 4:
+                self.G_masks[name] = torch.zeros_like(tensor,  requires_grad=False).cuda()
 
         for name, tensor in self.D_model.named_parameters():
-            self.D_names.append(name)
-            self.D_masks[name] = torch.zeros_like(tensor,  requires_grad=False).cuda()
+            if len(tensor.size()) == 4:
+                self.D_masks[name] = torch.zeros_like(tensor,  requires_grad=False).cuda()
 
-        print('Removing linear layer ...')
-        self.remove_weight_partial_name('linear')
-        print('Removing biases...')
-        self.remove_weight_partial_name('bias')
-        print('Removing gain...')
-        self.remove_weight_partial_name('gain')
-        print('Removing D.embed...')
-        self.remove_weight_partial_name('D.embed')
         self.init(mode=sparse_init, density=density, densityG=densityG)
 
 
-    def remove_weight(self, name):
-        if name in self.masks:
-            print('Removing {0} of size {1} = {2} parameters.'.format(name, self.masks[name].shape,
-                                                                      self.masks[name].numel()))
-            self.masks.pop(name)
-        elif name + '.weight' in self.masks:
-            print('Removing {0} of size {1} = {2} parameters.'.format(name, self.masks[name + '.weight'].shape,
-                                                                      self.masks[name + '.weight'].numel()))
-            self.masks.pop(name + '.weight')
-        else:
-            print('ERROR', name)
+    def apply_mask(self):
 
-    def remove_weight_partial_name(self, partial_name):
-        # removing G
-        removed = set()
-        for name in list(self.G_masks.keys()):
-            if partial_name in name:
+        model_para = get_model_params(self.G_model)
+        for name in model_para:
+            if name in self.G_masks:
+                model_para[name] = model_para[name]*self.G_masks[name]
+        set_model_params(self.G_model, model_para)
 
-                print('Removing {0} of size {1} with {2} parameters...'.format(name, self.G_masks[name].shape,
-                                                                                   np.prod(self.G_masks[name].shape)))
-                removed.add(name)
-                self.G_masks.pop(name)
+        model_para = get_model_params(self.D_model)
+        for name in model_para:
+            if name in self.D_masks:
+                model_para[name] = model_para[name] * self.D_masks[name]
+        set_model_params(self.D_model, model_para)
 
-        print('Removed {0} layers from Gegenerator.'.format(len(removed)))
-
-        i = 0
-        while i < len(self.G_names):
-            name = self.G_names[i]
-            if name in removed:
-                self.G_names.pop(i)
-            else:
-                i += 1
-
-        # removing D
-        removed = set()
-        for name in list(self.D_masks.keys()):
-            if partial_name in name:
-                print('Removing {0} of size {1} with {2} parameters...'.format(name, self.D_masks[name].shape,
-                                                                               np.prod(self.D_masks[name].shape)))
-                removed.add(name)
-                self.D_masks.pop(name)
-
-        print('Removed {0} layers from Discriminator.'.format(len(removed)))
-
-        i = 0
-        while i < len(self.D_names):
-            name = self.D_names[i]
-            if name in removed:
-                self.D_names.pop(i)
-            else:
-                i += 1
-
-    def remove_type(self, nn_type):
-        for module in self.modules:
-            for name, module in module.named_modules():
-                if isinstance(module, nn_type):
-                    self.remove_weight(name)
-
-    def apply_mask(self, apply_mode='GD'):
-        if 'G' in apply_mode:
-            model_para = get_model_params(self.G_model)
-            for name in model_para:
-                if name in self.G_masks:
-                    model_para[name] = model_para[name]*self.G_masks[name]
-            set_model_params(self.G_model, model_para)
-
-        if 'D' in apply_mode:
-            model_para = get_model_params(self.D_model)
-            for name in model_para:
-                if name in self.D_masks:
-                    model_para[name] = model_para[name] * self.D_masks[name]
-            set_model_params(self.D_model, model_para)
-
-    def truncate_weights(self, dy_mode):
+    def weight_exploration(self, dy_mode):
         print(f"perform weight exploration for{dy_mode}")
 
         # update G
@@ -459,7 +392,6 @@ class Masking(object):
         return new_mask
 
 
-
     def momentum_neuron_growth(self, name, new_mask, weight, num_remove):
         total_regrowth = self.num_remove[name]
         grad = self.get_momentum_for_weight(weight)
@@ -507,6 +439,7 @@ class Masking(object):
 
     def print_nonzero_counts(self, dy_mode):
         if 'G' in dy_mode:
+            print(f'-------------------------Generator------------------------------------')
             for name, tensor in self.G_model.named_parameters():
                 if name not in self.G_masks: continue
                 mask = self.G_masks[name]
@@ -515,6 +448,7 @@ class Masking(object):
                 print(val)
 
         if 'D' in dy_mode:
+            print(f'-------------------------netG_A2B------------------------------------')
             for name, tensor in self.D_model.named_parameters():
                 if name not in self.D_masks: continue
                 mask = self.D_masks[name]
@@ -536,7 +470,7 @@ class Masking(object):
             print('Layerwise percentage of the fired weights of', name, 'is:', G_layer_fired_weights[name])
         G_total_fired_weights = G_ntotal_fired_weights/G_ntotal_weights
         print('The percentage of the total fired weights of G is:', G_total_fired_weights)
-
+        print(f'-------------------------Discriminator------------------------------------')
         D_ntotal_fired_weights = 0.0
         D_ntotal_weights = 0.0
         D_layer_fired_weights = {}
@@ -549,7 +483,7 @@ class Masking(object):
             print('Layerwise percentage of the fired weights of', name, 'is:', D_layer_fired_weights[name])
         D_total_fired_weights = D_ntotal_fired_weights/D_ntotal_weights
         print('The percentage of the total fired weights of D is:', D_total_fired_weights)
-
+        print(f'-------------------------Discriminator------------------------------------')
 
     def ERK_initialize_G(self, erk_power_scale):
         total_params = 0

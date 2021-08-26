@@ -12,11 +12,16 @@ from torch.autograd import Variable
 from PIL import Image
 import torch
 from models import Generator, Discriminator, Generator_ori
-from utils import ReplayBuffer, LambdaLR, weights_init_normal
+from utils import ReplayBuffer, LambdaLR, weights_init_normal, name_from_config
 from datasets import ImageDataset
+import sys
+sys.path.append('..')
+import sparselearning
+from sparselearning.core_cyclegan import Masking, CosineDecay, LinearDecay
+
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--seed', type=int, default=1)
+parser.add_argument('--seed', type=int, default=0)
 parser.add_argument('--epoch', type=int, default=0, help='starting epoch')
 parser.add_argument('--n_epochs', type=int, default=200, help='number of epochs of training')
 parser.add_argument('--batchSize', type=int, default=1, help='size of the batches')
@@ -29,7 +34,9 @@ parser.add_argument('--output_nc', type=int, default=3, help='number of channels
 parser.add_argument('--n_cpu', type=int, default=2, help='number of cpu threads to use during batch generation')
 parser.add_argument('--gpu', default='0')
 parser.add_argument('--rand', type=str)
+parser.add_argument('--experiment_name', type=str, default='',help='Optionally override the automatic experiment naming with this arg. ''(default: %(default)s)')
 parser.add_argument('--upsample', default='transconv', choices=['ori', 'transconv', 'nearest', 'bilinear'], help='which upsample method to use in generater')
+sparselearning.core_cyclegan.add_sparse_args(parser)
 opt = parser.parse_args()
 print(opt)
 
@@ -37,10 +44,15 @@ os.environ['CUDA_VISIBLE_DEVICES'] = opt.gpu
 torch.backends.cudnn.benchmark = True
 
 ## mkdir:
+
+experiment_name = (opt.experiment_name if opt.experiment_name else name_from_config(opt))
 dataset_dir = os.path.join('datasets', opt.dataset)
 output_dir = os.path.join('output_%s' % opt.upsample, opt.dataset)
+output_dir = os.path.join(output_dir, experiment_name)
 img_dir = os.path.join(output_dir, 'imgs')
 pth_dir = os.path.join(output_dir, 'pth')
+
+
 if not os.path.isdir(img_dir):
     os.makedirs(img_dir)
 if not os.path.isdir(pth_dir):
@@ -104,12 +116,19 @@ transforms_ = [ transforms.Resize(int(opt.size*1.12), Image.BICUBIC),
                 transforms.RandomHorizontalFlip(),
                 transforms.ToTensor(),
                 transforms.Normalize((0.5,0.5,0.5), (0.5,0.5,0.5)) ]
+
 dataloader = DataLoader(ImageDataset(dataset_dir, transforms_=transforms_, unaligned=True), 
                         batch_size=opt.batchSize, shuffle=True, num_workers=opt.n_cpu, drop_last=True)
 
 # Loss plot
 # logger = Logger(opt.n_epochs, len(dataloader))
-###################################
+#### sparse module ###
+# initial mask
+mask = None
+if opt.sparse:
+    decay = CosineDecay(opt.death_rate, len(dataloader) * int(opt.n_epochs))
+    mask = Masking(optimizer_G=optimizer_G, optimizer_D_A=optimizer_D_A, optimizer_D_B=optimizer_D_B, death_rate_decay=decay, death_rate=opt.death_rate, args=opt)
+    mask.add_module(netG_A2B, netG_B2A, netD_A, netD_B, densityG=opt.densityG, density=opt.density, sparse_init=opt.sparse_init)
 
 ###### Training ######
 N = len(dataloader)
@@ -154,8 +173,10 @@ for epoch in range(opt.epoch, opt.n_epochs):
         # Total loss
         loss_G = loss_identity_A + loss_identity_B + loss_GAN_A2B + loss_GAN_B2A + loss_cycle_ABA + loss_cycle_BAB
         loss_G.backward()
-        
-        optimizer_G.step()
+
+        if opt.sparse:
+            mask.step(update_model='G')
+        else: optimizer_G.step()
         ###################################
 
         ###### Discriminator A ######
@@ -174,7 +195,11 @@ for epoch in range(opt.epoch, opt.n_epochs):
         loss_D_A = (loss_D_real + loss_D_fake)*0.5
         loss_D_A.backward()
 
-        optimizer_D_A.step()
+        # optimizer_D_A.step()
+        if opt.sparse:
+            mask.step(update_model='DA')
+        else:
+            optimizer_D_A.step()
         ###################################
 
         ###### Discriminator B ######
@@ -193,7 +218,11 @@ for epoch in range(opt.epoch, opt.n_epochs):
         loss_D_B = (loss_D_real + loss_D_fake)*0.5
         loss_D_B.backward()
 
-        optimizer_D_B.step()
+        # optimizer_D_B.step()
+        if opt.sparse:
+            mask.step(update_model='DB')
+        else:
+            optimizer_D_B.step()
         ###################################
         
         # print loss:

@@ -265,7 +265,7 @@ def calculate_activation_statistics_from_files(files, sess, batch_size=50, verbo
 
 # -------------------------------------------------------------------------------
 # The following functions aren't needed for calculating the FID
-# they're just here to make this module work as a stand-alone script
+# they're just here to make this module work as a stand-alone scripts
 # for calculating FID scores
 # -------------------------------------------------------------------------------
 def check_or_download_inception(inception_path):

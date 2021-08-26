@@ -1,6 +1,6 @@
 # Usage:
 #
-# python3 script.py --input original.png --output modified.png
+# python3 scripts.py --input original.png --output modified.png
 # Based on: https://github.com/mostafaGwely/Structural-Similarity-Index-SSIM-
 
 # 1. Import the necessary packages
