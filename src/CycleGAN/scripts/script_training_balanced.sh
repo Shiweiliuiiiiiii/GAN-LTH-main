@@ -26,6 +26,7 @@ do
   done
 done
 
+
 # training an imbalanced sparse model with various G-sparsity
 for s in 0 1 2
 do
@@ -33,7 +34,20 @@ do
   do
     python train.py --dataset horse2zebra \
     --sparse --imbalanced --sparse_init ERK --update_frequency 100 --rand initial_weights --seed $s \
-    --densityG $densityG --G_growth gradient --D_growth random --
+    --densityG $densityG --G_growth gradient --D_growth random
+  done
+done
+
+
+# need to finetue update_frequency: on runing
+# training an imbalanced DST sparse GAN with various G-sparsity; D-sparsity is fixed as 0.5
+for s in 0 1 2
+do
+  for densityG in 0.05 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 0.95
+  do
+    python train.py --dataset horse2zebra \
+    --sparse --imbalanced --sparse_init ERK --update_frequency 100 --rand initial_weights --seed $s \
+    --dy_mode GD --densityG $densityG --G_growth gradient --D_growth random
   done
 done
 conda activate GAN1
