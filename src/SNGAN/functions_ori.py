@@ -39,7 +39,6 @@ def train(args, gen_net: nn.Module, dis_net: nn.Module, gen_optimizer, dis_optim
     gen_net.train()
     for iter_idx, (imgs, _) in enumerate(train_loader):
         global_steps = writer_dict['train_global_steps']
-
         # Adversarial ground truths
         real_imgs = imgs.type(torch.cuda.FloatTensor)
         #real_imgs = DiffAugment(real_imgs, policy="translation,cutout")
@@ -116,33 +115,31 @@ def train(args, gen_net: nn.Module, dis_net: nn.Module, gen_optimizer, dis_optim
                 writer.add_scalar('LR/g_lr', g_lr, global_steps)
                 writer.add_scalar('LR/d_lr', d_lr, global_steps)
 
-            # sparse moving average weight
-            if args.SEMA:
-                if args.sparse:
-                    for name1, name2 in zip(gen_net.state_dict(), gen_avg_param):
-                        assert name1 == name2
-                        if name1 not in mask.G_masks:
-                            gen_avg_param[name2].float().mul_(0.999).add_(0.001, gen_net.state_dict()[name1].float())
-                        else:
-                            # detect the newly-added weights
-                            new_weighs_diff = ((gen_avg_param[name2] != 0).data.byte() ^ mask.G_masks[name1].data.byte()) & \
-                                              mask.G_masks[name1].data.byte()
-                            # add 0.999 * value to the newly-added weight.
-                            (gen_avg_param[name2].float().mul_(0.999).add_(0.001,
-                                                                           gen_net.state_dict()[name1].float())).mul_(
-                                mask.G_masks[name1]).add_(new_weighs_diff * 0.999 * gen_net.state_dict()[name1].float())
-                else:
-                    for name1, name2 in zip(gen_net.state_dict(), gen_avg_param):
-                        assert name1 == name2
-                        gen_avg_param[name2].float().mul_(0.999).add_(0.001, gen_net.state_dict()[name1].float())
-            else:
-                # EMA with mask version
+            # moving average weight
+            # for p, avg_p in zip(gen_net.parameters(), gen_avg_param):
+            #     avg_p.mul_(0.999).add_(0.001, p.data)
+            if args.sparse:
                 for name1, name2 in zip(gen_net.state_dict(), gen_avg_param):
-                    assert name1 == name2
+                    assert name1==name2
                     if name1 not in mask.G_masks:
                         gen_avg_param[name2].float().mul_(0.999).add_(0.001, gen_net.state_dict()[name1].float())
                     else:
-                        gen_avg_param[name2].float().mul_(mask.G_masks[name1]).mul_(0.999).add_(0.001, gen_net.state_dict()[name1].float())
+                        # detect the newly-added weights
+                        new_weighs_diff = ((gen_avg_param[name2]!=0).data.byte() ^ mask.G_masks[name1].data.byte()) & mask.G_masks[name1].data.byte()
+                        # add 0.999 * value to the newly-added weight.
+                        (gen_avg_param[name2].float().mul_(0.999).add_(0.001, gen_net.state_dict()[name1].float())).mul_(mask.G_masks[name1]).add_(new_weighs_diff*0.999*gen_net.state_dict()[name1].float())
+            else:
+                for name1, name2 in zip(gen_net.state_dict(), gen_avg_param):
+                    assert name1 == name2
+                    gen_avg_param[name2].float().mul_(0.999).add_(0.001, gen_net.state_dict()[name1].float())
+
+            # EMA with mask version
+            # for name1, name2 in zip(gen_net.state_dict(), gen_avg_param):
+            #     assert name1 == name2
+            #     if name1 not in mask.G_masks:
+            #         gen_avg_param[name2].float().mul_(0.999).add_(0.001, gen_net.state_dict()[name1].float())
+            #     else:
+            #         gen_avg_param[name2].float().mul_(mask.G_masks[name1]).mul_(0.999).add_(0.001, gen_net.state_dict()[name1].float())
 
             writer.add_scalar('g_loss', g_loss.item(), global_steps)
             gen_step += 1

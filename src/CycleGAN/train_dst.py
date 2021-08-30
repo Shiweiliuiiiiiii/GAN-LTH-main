@@ -1,6 +1,7 @@
 #!/usr/bin/python3
 
 import argparse, itertools, os
+import random
 import numpy as np 
 import matplotlib.pyplot as plt
 from skimage.io import imread, imsave
@@ -11,8 +12,9 @@ from torch.utils.data import DataLoader
 from torch.autograd import Variable
 from PIL import Image
 import torch
+
 from models import Generator, Discriminator, Generator_ori
-from utils import ReplayBuffer, LambdaLR, weights_init_normal, name_from_config
+from utils import ReplayBuffer, LambdaLR, weights_init_normal, validate, name_from_config
 from datasets import ImageDataset
 import sys
 sys.path.append('..')
@@ -21,7 +23,7 @@ from sparselearning.core_cyclegan import Masking, CosineDecay, LinearDecay
 
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--seed', type=int, default=0)
+parser.add_argument('--seed', type=int, default = None)
 parser.add_argument('--epoch', type=int, default=0, help='starting epoch')
 parser.add_argument('--n_epochs', type=int, default=200, help='number of epochs of training')
 parser.add_argument('--batchSize', type=int, default=1, help='size of the batches')
@@ -32,27 +34,35 @@ parser.add_argument('--size', type=int, default=256, help='size of the data crop
 parser.add_argument('--input_nc', type=int, default=3, help='number of channels of input data')
 parser.add_argument('--output_nc', type=int, default=3, help='number of channels of output data')
 parser.add_argument('--n_cpu', type=int, default=2, help='number of cpu threads to use during batch generation')
-parser.add_argument('--gpu', default='0')
-parser.add_argument('--rand', type=str)
-parser.add_argument('--experiment_name', type=str, default='',help='Optionally override the automatic experiment naming with this arg. ''(default: %(default)s)')
+parser.add_argument('--gpu', default='7')
 parser.add_argument('--upsample', default='transconv', choices=['ori', 'transconv', 'nearest', 'bilinear'], help='which upsample method to use in generater')
-sparselearning.core_cyclegan.add_sparse_args(parser)
-opt = parser.parse_args()
-print(opt)
+parser.add_argument('--exp-name', type=str)
+parser.add_argument('--pretrain', type=str)
+parser.add_argument('--rand', type=str)
 
-os.environ['CUDA_VISIBLE_DEVICES'] = opt.gpu
+#iterative pruning setting
+parser.add_argument('--states', type=int, default=10, help='all pruning states')
+parser.add_argument('--rate', type=float, default=0.2, help='pruning rate')
+sparselearning.core_cyclegan.add_sparse_args(parser)
+args = parser.parse_args()
+print(args)
+
+np.random.seed(args.seed)
+random.seed(args.seed)
+torch.manual_seed(args.seed)
+if torch.cuda.is_available():
+    torch.cuda.manual_seed(args.seed)
+
+os.environ['CUDA_VISIBLE_DEVICES'] = args.gpu
 torch.backends.cudnn.benchmark = True
 
 ## mkdir:
-
-experiment_name = (opt.experiment_name if opt.experiment_name else name_from_config(opt))
-dataset_dir = os.path.join('datasets', opt.dataset)
-output_dir = os.path.join('output_%s' % opt.upsample, opt.dataset)
+experiment_name = (args.exp_name if args.exp_name else name_from_config(args))
+dataset_dir = os.path.join('datasets', args.dataset)
+output_dir = os.path.join('output_%s' % args.upsample, args.dataset)
 output_dir = os.path.join(output_dir, experiment_name)
 img_dir = os.path.join(output_dir, 'imgs')
 pth_dir = os.path.join(output_dir, 'pth')
-
-
 if not os.path.isdir(img_dir):
     os.makedirs(img_dir)
 if not os.path.isdir(pth_dir):
@@ -60,84 +70,96 @@ if not os.path.isdir(pth_dir):
 
 ###### Definition of variables ######
 # Networks
-if opt.upsample == 'ori':
-    netG_A2B = Generator_ori(opt.input_nc, opt.output_nc)
-    netG_B2A = Generator_ori(opt.output_nc, opt.input_nc)
+if args.upsample == 'ori':
+    netG_A2B = Generator_ori(args.input_nc, args.output_nc)
+    netG_B2A = Generator_ori(args.output_nc, args.input_nc)
 else:
-    netG_A2B = Generator(opt.input_nc, opt.output_nc)
-    netG_B2A = Generator(opt.output_nc, opt.input_nc)
-netD_A = Discriminator(opt.input_nc)
-netD_B = Discriminator(opt.output_nc)
+    netG_A2B = Generator(args.input_nc, args.output_nc)
+    netG_B2A = Generator(args.output_nc, args.input_nc)
+netD_A = Discriminator(args.input_nc)
+netD_B = Discriminator(args.output_nc)
 
 
-netG_A2B.load_state_dict(torch.load(os.path.join(opt.rand, 'netG_A2B_seed_{}.pth.tar'.format(opt.seed))))
-netG_B2A.load_state_dict(torch.load(os.path.join(opt.rand, 'netG_B2A_seed_{}.pth.tar'.format(opt.seed))))
-netD_A.load_state_dict(torch.load(os.path.join(opt.rand, 'netD_A_seed_{}.pth.tar'.format(opt.seed))))
-netD_B.load_state_dict(torch.load(os.path.join(opt.rand, 'netD_B_seed_{}.pth.tar'.format(opt.seed))))
-
-netG_A2B.train()
-netD_A.train()
-netD_B.train()
-netG_B2A.train()
+netG_A2B.load_state_dict(torch.load(os.path.join(args.rand, 'netG_A2B_seed_{}.pth.tar'.format(args.seed))))
+netG_B2A.load_state_dict(torch.load(os.path.join(args.rand, 'netG_B2A_seed_{}.pth.tar'.format(args.seed))))
+netD_A.load_state_dict(torch.load(os.path.join(args.rand, 'netD_A_seed_{}.pth.tar'.format(args.seed))))
+netD_B.load_state_dict(torch.load(os.path.join(args.rand, 'netD_B_seed_{}.pth.tar'.format(args.seed))))
 
 netG_A2B.cuda()
 netG_B2A.cuda()
 netD_A.cuda()
 netD_B.cuda()
 
+
 # Lossess
 criterion_GAN = torch.nn.MSELoss()
 criterion_cycle = torch.nn.L1Loss()
 criterion_identity = torch.nn.L1Loss()
 
+
+# Dataset loader
+transforms_ = [ transforms.Resize(int(args.size*1.12), Image.BICUBIC), 
+                transforms.RandomCrop(args.size), 
+                transforms.RandomHorizontalFlip(),
+                transforms.ToTensor(),
+                transforms.Normalize((0.5,0.5,0.5), (0.5,0.5,0.5)) ]
+dataloader = DataLoader(ImageDataset(dataset_dir, transforms_=transforms_, unaligned=True), 
+                        batch_size=args.batchSize, shuffle=True, num_workers=args.n_cpu, drop_last=True)
+
+# Loss plot
+# logger = Logger(args.n_epochs, len(dataloader))
+###################################
+
+###### Training ######
+
+test_transforms_ = [ transforms.ToTensor(),
+                    transforms.Normalize((0.5,0.5,0.5), (0.5,0.5,0.5)) ]
+
+test_dataloader = DataLoader(ImageDataset(dataset_dir, transforms_=test_transforms_, mode='test'), 
+                             batch_size=1, shuffle=False, num_workers=args.n_cpu)
+
+
 # Optimizers & LR schedulers
 optimizer_G = torch.optim.Adam(itertools.chain(netG_A2B.parameters(), netG_B2A.parameters()),
-                                lr=opt.lr, betas=(0.5, 0.999))
-optimizer_D_A = torch.optim.Adam(netD_A.parameters(), lr=opt.lr, betas=(0.5, 0.999))
-optimizer_D_B = torch.optim.Adam(netD_B.parameters(), lr=opt.lr, betas=(0.5, 0.999))
+                                lr=args.lr, betas=(0.5, 0.999))
+optimizer_D_A = torch.optim.Adam(netD_A.parameters(), lr=args.lr, betas=(0.5, 0.999))
+optimizer_D_B = torch.optim.Adam(netD_B.parameters(), lr=args.lr, betas=(0.5, 0.999))
 
-lr_scheduler_G = torch.optim.lr_scheduler.LambdaLR(optimizer_G, lr_lambda=LambdaLR(opt.n_epochs, opt.epoch, opt.decay_epoch).step)
-lr_scheduler_D_A = torch.optim.lr_scheduler.LambdaLR(optimizer_D_A, lr_lambda=LambdaLR(opt.n_epochs, opt.epoch, opt.decay_epoch).step)
-lr_scheduler_D_B = torch.optim.lr_scheduler.LambdaLR(optimizer_D_B, lr_lambda=LambdaLR(opt.n_epochs, opt.epoch, opt.decay_epoch).step)
+lr_scheduler_G = torch.optim.lr_scheduler.LambdaLR(optimizer_G, lr_lambda=LambdaLR(args.n_epochs, args.epoch, args.decay_epoch).step)
+lr_scheduler_D_A = torch.optim.lr_scheduler.LambdaLR(optimizer_D_A, lr_lambda=LambdaLR(args.n_epochs, args.epoch, args.decay_epoch).step)
+lr_scheduler_D_B = torch.optim.lr_scheduler.LambdaLR(optimizer_D_B, lr_lambda=LambdaLR(args.n_epochs, args.epoch, args.decay_epoch).step)
+
 
 # Inputs & targets memory allocation
 Tensor = torch.cuda.FloatTensor
-input_A = Tensor(opt.batchSize, opt.input_nc, opt.size, opt.size)
-input_B = Tensor(opt.batchSize, opt.output_nc, opt.size, opt.size)
-target_real = Variable(Tensor(opt.batchSize).fill_(1.0), requires_grad=False)
-target_fake = Variable(Tensor(opt.batchSize).fill_(0.0), requires_grad=False)
+input_A = Tensor(args.batchSize, args.input_nc, args.size, args.size)
+input_B = Tensor(args.batchSize, args.output_nc, args.size, args.size)
+target_real = Variable(Tensor(args.batchSize).fill_(1.0), requires_grad=False)
+target_fake = Variable(Tensor(args.batchSize).fill_(0.0), requires_grad=False)
 
 fake_A_buffer = ReplayBuffer()
 fake_B_buffer = ReplayBuffer()
 
-# Dataset loader
-transforms_ = [ transforms.Resize(int(opt.size*1.12), Image.BICUBIC), 
-                transforms.RandomCrop(opt.size), 
-                transforms.RandomHorizontalFlip(),
-                transforms.ToTensor(),
-                transforms.Normalize((0.5,0.5,0.5), (0.5,0.5,0.5)) ]
-
-dataloader = DataLoader(ImageDataset(dataset_dir, transforms_=transforms_, unaligned=True), 
-                        batch_size=opt.batchSize, shuffle=True, num_workers=opt.n_cpu, drop_last=True)
-
-# Loss plot
-# logger = Logger(opt.n_epochs, len(dataloader))
 #### sparse module ###
 # initial mask
+print(len(dataloader) * int(args.n_epochs))
 mask = None
-if opt.sparse:
-    decay = CosineDecay(opt.death_rate, len(dataloader) * int(opt.n_epochs))
-    mask = Masking(optimizer_G=optimizer_G, optimizer_D_A=optimizer_D_A, optimizer_D_B=optimizer_D_B, death_rate_decay=decay, death_rate=opt.death_rate, args=opt)
-    mask.add_module(netG_A2B, netG_B2A, netD_A, netD_B, densityG=opt.densityG, density=opt.density, sparse_init=opt.sparse_init)
+if args.sparse:
+    decay = CosineDecay(args.death_rate, len(dataloader) * int(args.n_epochs))
+    mask = Masking(optimizer_G=optimizer_G, optimizer_D_A=optimizer_D_A, optimizer_D_B=optimizer_D_B, death_rate_decay=decay, death_rate=args.death_rate, args=args)
+    mask.add_module(netG_A2B, netG_B2A, netD_A, netD_B, densityG=args.densityG, density=args.density, sparse_init=args.sparse_init)
 
-###### Training ######
+
 N = len(dataloader)
 print('N:', N) # 1334
 loss_G_lst, loss_D_lst, loss_G_GAN_lst, loss_G_cycle_lst, loss_G_identity_lst = [], [], [], [], []
-for epoch in range(opt.epoch, opt.n_epochs):
+for epoch in range(args.epoch, args.n_epochs):
     # reset loss to 0
+    netG_A2B.train()
+    netG_B2A.train()
     loss_G_value, loss_D_value, loss_G_GAN_value, loss_G_cycle_value, loss_G_identity_value = 0, 0, 0, 0, 0
     for i, batch in enumerate(dataloader):
+
         # Set model input
         real_A = Variable(input_A.copy_(batch['A']))
         real_B = Variable(input_B.copy_(batch['B']))
@@ -174,9 +196,10 @@ for epoch in range(opt.epoch, opt.n_epochs):
         loss_G = loss_identity_A + loss_identity_B + loss_GAN_A2B + loss_GAN_B2A + loss_cycle_ABA + loss_cycle_BAB
         loss_G.backward()
 
-        if opt.sparse:
+        if args.sparse:
             mask.step(update_model='G')
-        else: optimizer_G.step()
+        else:
+            optimizer_G.step()
         ###################################
 
         ###### Discriminator A ######
@@ -195,8 +218,7 @@ for epoch in range(opt.epoch, opt.n_epochs):
         loss_D_A = (loss_D_real + loss_D_fake)*0.5
         loss_D_A.backward()
 
-        # optimizer_D_A.step()
-        if opt.sparse:
+        if args.sparse:
             mask.step(update_model='DA')
         else:
             optimizer_D_A.step()
@@ -208,7 +230,7 @@ for epoch in range(opt.epoch, opt.n_epochs):
         # Real loss
         pred_real = netD_B(real_B)
         loss_D_real = criterion_GAN(pred_real, target_real)
-        
+
         # Fake loss
         fake_B = fake_B_buffer.push_and_pop(fake_B)
         pred_fake = netD_B(fake_B.detach())
@@ -218,16 +240,15 @@ for epoch in range(opt.epoch, opt.n_epochs):
         loss_D_B = (loss_D_real + loss_D_fake)*0.5
         loss_D_B.backward()
 
-        # optimizer_D_B.step()
-        if opt.sparse:
+        if args.sparse:
             mask.step(update_model='DB')
         else:
             optimizer_D_B.step()
         ###################################
-        
+
         # print loss:
         if i % 100 == 0:
-            print('epoch %d-%d: loss_G %.4f, loss_D %.4f' % (
+            print(' epoch %d-%d: loss_G %.4f, loss_D %.4f' % (
                 epoch, i, loss_G.data, (loss_D_A + loss_D_B).data))
 
         loss_G_value += loss_G.data
@@ -235,19 +256,20 @@ for epoch in range(opt.epoch, opt.n_epochs):
         loss_G_GAN_value += (loss_GAN_A2B + loss_GAN_B2A).data
         loss_G_cycle_value += (loss_cycle_ABA + loss_cycle_BAB).data
         loss_G_identity_value += (loss_identity_A + loss_identity_B).data
-    if epoch % 5 == 0 or epoch == opt.n_epochs - 1:
+
+    if epoch % 1 == 0 or epoch == args.n_epochs - 1:
         torch.save(netG_A2B.state_dict(), os.path.join(pth_dir, 'netG_A2B_epoch_{}.pth'.format(epoch)))
         torch.save(netG_B2A.state_dict(), os.path.join(pth_dir, 'netG_B2A_epoch_{}.pth'.format(epoch)))
         torch.save(netD_A.state_dict(), os.path.join(pth_dir, 'netD_A_epoch_{}.pth'.format(epoch)))
         torch.save(netD_B.state_dict(), os.path.join(pth_dir, 'netD_B_epoch_{}.pth'.format(epoch)))
 
-        validate(test_dataloader, netG_A2B, netG_B2A, args.dataset)
+        validate(test_dataloader, netG_A2B, netG_B2A, args.dataset, exp_name=experiment_name)
 
     ## at the end of each epoch
     # plot loss:
-    losses = {'loss_G': (loss_G_lst, loss_G_value), 'loss_D': (loss_D_lst, loss_D_value), 
-            'loss_G_GAN': (loss_G_GAN_lst, loss_G_GAN_value), 
-            'loss_G_cycle': (loss_G_cycle_lst, loss_G_cycle_value), 
+    losses = {'loss_G': (loss_G_lst, loss_G_value), 'loss_D': (loss_D_lst, loss_D_value),
+            'loss_G_GAN': (loss_G_GAN_lst, loss_G_GAN_value),
+            'loss_G_cycle': (loss_G_cycle_lst, loss_G_cycle_value),
             'loss_G_identity': (loss_G_identity_lst, loss_G_identity_value)}
     for key in losses:
         losses[key][0].append(losses[key][1]/N)
@@ -255,16 +277,24 @@ for epoch in range(opt.epoch, opt.n_epochs):
         plt.savefig(os.path.join(output_dir, '%s.png' % key))
         plt.close()
     # save imgs:
-    if epoch % 5 == 0 or epoch == opt.n_epochs - 1:
+    '''
+    if epoch % 5 == 0 or epoch == args.n_epochs - 1:
         images={'real_A': real_A, 'real_B': real_B, 'fake_A': fake_A, 'fake_B': fake_B}
         for key in images:
             img_np = images[key].detach().cpu().numpy().squeeze()
             img_np = (img_np + 1) / 2 # (-1,1) -> (0,1)
             img_np = img_as_ubyte(np.moveaxis(img_np, 0, -1)) # channel first to channel last.
             print('img_np:', img_np.shape)
-            imsave(os.path.join(output_dir, 'epoch%d_%s.png' % (epoch, key)), img_np)
-
+            imsave(os.path.join(img_dir, 'epoch%d_%s.png' % (epoch, key)), img_np)
+    '''
     # Update learning rates
     lr_scheduler_G.step()
     lr_scheduler_D_A.step()
     lr_scheduler_D_B.step()
+
+    # Save models checkpoints
+    # torch.save(netG_A2B.state_dict(), os.path.join(output_dir, 'netG_A2B.pth'))
+    # torch.save(netG_B2A.state_dict(), os.path.join(output_dir, 'netG_B2A.pth'))
+    # torch.save(netD_A.state_dict(), os.path.join(output_dir, 'netD_A.pth'))
+    # torch.save(netD_B.state_dict(), os.path.join(output_dir, 'netD_B.pth'))
+###################################

@@ -21,7 +21,8 @@ def add_sparse_args(parser):
     parser.add_argument('--update_frequency', type=int, default=2000, metavar='N', help='how many iterations to train between parameter exploration')
     parser.add_argument('--decay_schedule', type=str, default='cosine', help='The decay schedule for the pruning rate. Default: cosine. Choose from: cosine, linear.')
     parser.add_argument('--densityG', type=float, default=0.06, help='The density ratio of G.')
-    parser.add_argument('--balanced', action='store_true', help='Enable balanced training mode. Default: True.')
+    parser.add_argument('--imbalanced', action='store_true', help='Enable balanced training mode. Default: False.')
+    parser.add_argument('--SEMA', action='store_true', help='Enable sparse moving average weight. Default: False.')
 
 def get_model_params(model):
     params = {}
@@ -116,15 +117,14 @@ class Masking(object):
 
         total_params = G_total_params + D_total_params
 
-        if self.args.balanced:
+        if not self.args.imbalanced:
             self.G_density = density
             self.D_density = density
         else:
             self.G_density = densityG
-            self.D_density = (total_params * density - G_total_params * self.G_density) / D_total_params
-            if self.D_density <= 0:
-                raise Exception('The density of Discriminator is smaller than 0')
-
+            self.D_density = 0.5
+            # if self.D_density <= 0:
+            #     raise Exception('The density of Discriminator is smaller than 0')
 
         if mode == 'uniform':
             for name, weight in self.G_model.named_parameters():
@@ -139,7 +139,7 @@ class Masking(object):
             self.ERK_initialize_G(erk_power_scale)
             self.ERK_initialize_D(erk_power_scale)
 
-        self.apply_mask(apply_mode='GD')
+        self.apply_mask()
         self.G_fired_masks = copy.deepcopy(self.G_masks) # used for ITOP
         self.D_fired_masks = copy.deepcopy(self.D_masks) # used for ITOP
 
@@ -163,11 +163,11 @@ class Masking(object):
         print('Total parameters under sparsity level of {0}: {1}'.format(self.D_density, D_sparse_size / D_total_size))
 
 
-    def step(self, global_steps=0, explore_mode='GD'):
+    def step(self, explore_mode='GD'):
         if 'G' in explore_mode:
             self.G_optimizer.step()
             self.apply_mask()
-
+            self.steps += 1
         if 'D' in explore_mode:
             self.D_optimizer.step()
             self.apply_mask()
@@ -176,7 +176,7 @@ class Masking(object):
             self.death_rate = self.death_rate_decay.get_dr()
 
         if self.prune_every_k_steps is not None:
-            if global_steps % self.prune_every_k_steps == 0 and global_steps > 0 and 'G' in explore_mode:
+            if self.steps % self.prune_every_k_steps == 0 and self.steps > 0 and 'G' in explore_mode:
                 self.weight_exploration(dy_mode=self.dy_mode)
                 self.print_nonzero_counts(dy_mode=self.dy_mode)
                 self.fired_masks_update()
@@ -215,6 +215,7 @@ class Masking(object):
 
         # update G
         if 'G' in dy_mode:
+            print(f'-------------------------Generator exploration------------------------------------')
             # prune
             for name, weight in self.G_model.named_parameters():
                 if name not in self.G_masks: continue
@@ -248,6 +249,7 @@ class Masking(object):
 
         # update D
         if 'D' in dy_mode:
+            print(f'-------------------------Distriminator exploration------------------------------------')
             # prune
             for name, weight in self.D_model.named_parameters():
                 if name not in self.D_masks: continue
@@ -279,7 +281,7 @@ class Masking(object):
                 self.D_masks.pop(name)
                 self.D_masks[name] = new_mask.float()
 
-        self.apply_mask(apply_mode='GD')
+        self.apply_mask()
     '''
                     DEATH
     '''

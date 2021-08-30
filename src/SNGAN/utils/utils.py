@@ -85,7 +85,7 @@ def create_logger(log_dir, phase='train'):
     return logger
 
 
-def set_log_dir(root_dir, exp_name):
+def set_log_dir(root_dir, exp_name, args):
     path_dict = {}
     os.makedirs(root_dir, exist_ok=True)
 
@@ -93,7 +93,7 @@ def set_log_dir(root_dir, exp_name):
     exp_path = os.path.join(root_dir, exp_name)
     now = datetime.now(dateutil.tz.tzlocal())
     timestamp = now.strftime('%Y_%m_%d_%H_%M_%S')
-    prefix = exp_path + '_' + timestamp
+    prefix = exp_path + '_' + timestamp + '_' + 'seed%s' % args.random_seed
     os.makedirs(prefix)
     path_dict['prefix'] = prefix
 

@@ -173,6 +173,6 @@ def parse_args():
     parser.add_argument('--ratio', type=float, default=0.1)
     parser.add_argument('--gamma', type=float, default=0.01)
     parser.add_argument('--steps', type=int, default=1)
-    sparselearning.core.add_sparse_args(parser)
+    sparselearning.core_SNGAN.add_sparse_args(parser)
     opt = parser.parse_args()
     return opt

@@ -2,7 +2,7 @@ import cfg
 import models
 import datasets
 import random
-from functions import train, validate, LinearLrDecay, load_params, copy_params
+from functions_ori import train, validate, LinearLrDecay, load_params, copy_params
 from utils.utils import set_log_dir, save_checkpoint, create_logger
 from utils.inception_score import _init_inception
 from utils.fid_score import create_inception_graph, check_or_download_inception
@@ -143,7 +143,7 @@ def main():
                 is_best = False
         else:
             is_best = False
-        logger.info('Best FID score is: %.4f' % (best_fid))
+
         avg_gen_net = deepcopy(gen_net)
         set_model_params(avg_gen_net, gen_avg_param)
         save_checkpoint({

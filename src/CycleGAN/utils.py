@@ -83,14 +83,15 @@ def weights_init_normal(m):
         torch.nn.init.constant(m.bias.data, 0.0)
 
 
-def validate(test_dataloader, netG_A2B, netG_B2A, dataset):
+def validate(test_dataloader, netG_A2B, netG_B2A, dataset, exp_name):
     now = datetime.now(dateutil.tz.tzlocal())
     timestamp = now.strftime('%Y_%m_%d_%H_%M_%S')
-    temp_buffer = "fid_buffer_{}".format(timestamp)
+    fid_buffer_dir = "fid_buffer"
+    temp_buffer = os.path.join(fid_buffer_dir, exp_name)
     if not os.path.exists(temp_buffer):
-        os.mkdir(temp_buffer)
-        os.mkdir(os.path.join(temp_buffer, 'A'))
-        os.mkdir(os.path.join(temp_buffer, 'B'))
+        os.makedirs(temp_buffer)
+        os.makedirs(os.path.join(temp_buffer, 'A'))
+        os.makedirs(os.path.join(temp_buffer, 'B'))
         
     for i, batch in enumerate(test_dataloader):
         # Set model input
