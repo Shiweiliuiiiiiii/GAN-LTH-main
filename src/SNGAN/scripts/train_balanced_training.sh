@@ -14,11 +14,6 @@ conda activate GAN1
 
 #--------- balanced SNGAN training -----------------
 
-for density in 0.05 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9
-do
-python train.py --model sngan_cifar10 --exp-name sngan_cifar10_balanced --init-path initial_weights \
---sparse --sparse_init ERK --density $density --update_frequency 4000 --random_seed 1
-done
 
 for density in 0.05 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9
 do

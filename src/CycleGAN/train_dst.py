@@ -58,6 +58,13 @@ torch.backends.cudnn.benchmark = True
 
 ## mkdir:
 experiment_name = (args.exp_name if args.exp_name else name_from_config(args))
+
+if args.sparse:
+    if args.imbalanced:
+        experiment_name = experiment_name + '_densityD' + str(args.densityD) + '_densityG' + str(args.densityG)
+    else:
+        experiment_name = experiment_name + '_density' + str(args.density)
+
 dataset_dir = os.path.join('datasets', args.dataset)
 output_dir = os.path.join('output_%s' % args.upsample, args.dataset)
 output_dir = os.path.join(output_dir, experiment_name)
@@ -152,6 +159,7 @@ if args.sparse:
 
 N = len(dataloader)
 print('N:', N) # 1334
+best_fid = 100000
 loss_G_lst, loss_D_lst, loss_G_GAN_lst, loss_G_cycle_lst, loss_G_identity_lst = [], [], [], [], []
 for epoch in range(args.epoch, args.n_epochs):
     # reset loss to 0
@@ -257,13 +265,18 @@ for epoch in range(args.epoch, args.n_epochs):
         loss_G_cycle_value += (loss_cycle_ABA + loss_cycle_BAB).data
         loss_G_identity_value += (loss_identity_A + loss_identity_B).data
 
-    if epoch % 1 == 0 or epoch == args.n_epochs - 1:
+    if epoch % 5 == 0 or epoch == args.n_epochs - 1:
         torch.save(netG_A2B.state_dict(), os.path.join(pth_dir, 'netG_A2B_epoch_{}.pth'.format(epoch)))
         torch.save(netG_B2A.state_dict(), os.path.join(pth_dir, 'netG_B2A_epoch_{}.pth'.format(epoch)))
         torch.save(netD_A.state_dict(), os.path.join(pth_dir, 'netD_A_epoch_{}.pth'.format(epoch)))
         torch.save(netD_B.state_dict(), os.path.join(pth_dir, 'netD_B_epoch_{}.pth'.format(epoch)))
 
-        validate(test_dataloader, netG_A2B, netG_B2A, args.dataset, exp_name=experiment_name)
+        fid_value_A, fid_value_B = validate(test_dataloader, netG_A2B, netG_B2A, args.dataset, exp_name=experiment_name)
+
+        if fid_value_B < best_fid:
+            best_fid = fid_value_B
+
+        print('The best B FID score is', best_fid)
 
     ## at the end of each epoch
     # plot loss:

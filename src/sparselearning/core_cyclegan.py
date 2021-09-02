@@ -21,6 +21,7 @@ def add_sparse_args(parser):
     parser.add_argument('--update_frequency', type=int, default=2000, metavar='N', help='how many iterations to train between parameter exploration')
     parser.add_argument('--decay_schedule', type=str, default='cosine', help='The decay schedule for the pruning rate. Default: cosine. Choose from: cosine, linear.')
     parser.add_argument('--densityG', type=float, default=0.06, help='The density level of G for imbalanced GAN.')
+    parser.add_argument('--densityD', type=float, default=0.06, help='The density level of D for imbalanced GAN.')
     parser.add_argument('--imbalanced', action='store_true', help='Enable balanced training mode. Default: True.')
 
 def get_model_params(model):
@@ -92,7 +93,8 @@ class Masking(object):
         self.optimizer_D_B = optimizer_D_B
         # DST for which model
         self.dy_mode = args.dy_mode
-
+        self.densityD = args.densityD
+        self.densityG = args.densityG
         # stats
         self.death_rate = death_rate
         self.global_steps = 0
@@ -127,8 +129,8 @@ class Masking(object):
             self.G_density = density
             self.D_density = density
         else:
-            self.G_density = densityG
-            self.D_density = 0.5
+            self.G_density = self.densityG
+            self.D_density = self.densityD
 
         print(f'Density of G is expected to be {self.G_density}')
         print(f'Density of D is expected to be {self.D_density}')

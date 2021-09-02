@@ -34,7 +34,7 @@ parser.add_argument('--output_nc', type=int, default=3, help='number of channels
 parser.add_argument('--n_cpu', type=int, default=2, help='number of cpu threads to use during batch generation')
 parser.add_argument('--gpu', default='0')
 parser.add_argument('--rand', type=str)
-parser.add_argument('--experiment_name', type=str, default='',help='Optionally override the automatic experiment naming with this arg. ''(default: %(default)s)')
+parser.add_argument('--exp-name', type=str)
 parser.add_argument('--upsample', default='transconv', choices=['ori', 'transconv', 'nearest', 'bilinear'], help='which upsample method to use in generater')
 sparselearning.core_cyclegan.add_sparse_args(parser)
 opt = parser.parse_args()
@@ -45,7 +45,7 @@ torch.backends.cudnn.benchmark = True
 
 ## mkdir:
 
-experiment_name = (opt.experiment_name if opt.experiment_name else name_from_config(opt))
+experiment_name = (opt.exp_name if opt.exp_name else name_from_config(opt))
 dataset_dir = os.path.join('datasets', opt.dataset)
 output_dir = os.path.join('output_%s' % opt.upsample, opt.dataset)
 output_dir = os.path.join(output_dir, experiment_name)
@@ -241,7 +241,7 @@ for epoch in range(opt.epoch, opt.n_epochs):
         torch.save(netD_A.state_dict(), os.path.join(pth_dir, 'netD_A_epoch_{}.pth'.format(epoch)))
         torch.save(netD_B.state_dict(), os.path.join(pth_dir, 'netD_B_epoch_{}.pth'.format(epoch)))
 
-        validate(test_dataloader, netG_A2B, netG_B2A, args.dataset)
+        # validate(test_dataloader, netG_A2B, netG_B2A, args.dataset)
 
     ## at the end of each epoch
     # plot loss:

@@ -20,7 +20,8 @@ def add_sparse_args(parser):
     parser.add_argument('--density', type=float, default=0.3, help='The density of the overall sparse network.')
     parser.add_argument('--update_frequency', type=int, default=2000, metavar='N', help='how many iterations to train between parameter exploration')
     parser.add_argument('--decay_schedule', type=str, default='cosine', help='The decay schedule for the pruning rate. Default: cosine. Choose from: cosine, linear.')
-    parser.add_argument('--densityG', type=float, default=0.06, help='The density ratio of G.')
+    parser.add_argument('--densityG', type=float, default=0.06, help='The density of G.')
+    parser.add_argument('--densityD', type=float, default=0.06, help='The density of D.')
     parser.add_argument('--imbalanced', action='store_true', help='Enable balanced training mode. Default: False.')
     parser.add_argument('--SEMA', action='store_true', help='Enable sparse moving average weight. Default: False.')
 
@@ -87,7 +88,8 @@ class Masking(object):
         self.G_optimizer = G_optimizer
         self.D_optimizer = D_optimizer
         self.dy_mode = args.dy_mode
-
+        self.densityD = args.densityD
+        self.densityG = args.densityG
         # stats
         self.G_name2zeros = {}
         self.G_num_remove = {}
@@ -121,8 +123,8 @@ class Masking(object):
             self.G_density = density
             self.D_density = density
         else:
-            self.G_density = densityG
-            self.D_density = 0.5
+            self.G_density = self.densityG
+            self.D_density = self.densityD
             # if self.D_density <= 0:
             #     raise Exception('The density of Discriminator is smaller than 0')
 

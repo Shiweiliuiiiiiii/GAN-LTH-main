@@ -92,8 +92,14 @@ def set_log_dir(root_dir, exp_name, args):
     # set log path
     exp_path = os.path.join(root_dir, exp_name)
     now = datetime.now(dateutil.tz.tzlocal())
-    timestamp = now.strftime('%Y_%m_%d_%H_%M_%S')
-    prefix = exp_path + '_' + timestamp + '_' + 'seed%s' % args.random_seed
+    # timestamp = now.strftime('%Y_%m_%d_%H_%M_%S')
+    prefix = exp_path
+    if args.sparse:
+        if args.imbalanced:
+            prefix = exp_path + '_densityD' + str(args.densityD) + '_densityG' + str(args.densityG)
+        else:
+            prefix = exp_path + '_density' + str(args.density)
+
     os.makedirs(prefix)
     path_dict['prefix'] = prefix
 

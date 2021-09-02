@@ -12,9 +12,9 @@ source /public/data2/software/software/anaconda3/bin/activate
 conda activate GAN1
 
 #--------- dense training -----------------
-python train.py --model sngan_cifar10 --exp-name dense_sngan_cifar10_official --init-path initial_weights --random_seed 1
-python train.py --model sngan_cifar10 --exp-name dense_sngan_cifar10_official --init-path initial_weights --random_seed 2
-python train.py --model sngan_cifar10 --exp-name dense_sngan_cifar10_official --init-path initial_weights --random_seed 3
+python train.py --model sngan_cifar10 --SEMA --exp-name dense_sngan_cifar10_official --init-path initial_weights --random_seed 1
+python train.py --model sngan_cifar10 --SEMA --exp-name dense_sngan_cifar10_official --init-path initial_weights --random_seed 2
+python train.py --model sngan_cifar10 --SEMA --exp-name dense_sngan_cifar10_official --init-path initial_weights --random_seed 3
 
 
 conda deactivate
