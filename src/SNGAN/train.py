@@ -52,8 +52,8 @@ def main():
                                      args.g_lr, (args.beta1, args.beta2))
     dis_optimizer = torch.optim.Adam(filter(lambda p: p.requires_grad, dis_net.parameters()),
                                      args.d_lr, (args.beta1, args.beta2))
-    gen_scheduler = LinearLrDecay(gen_optimizer, args.g_lr, 0.0, 0, args.max_iter * args.n_critic)
-    dis_scheduler = LinearLrDecay(dis_optimizer, args.d_lr, 0.0, 0, args.max_iter * args.n_critic)
+    gen_scheduler = LinearLrDecay(gen_optimizer, args.g_lr, 0.0, 0, args.max_iter * args.n_critic * args.multiplier)
+    dis_scheduler = LinearLrDecay(dis_optimizer, args.d_lr, 0.0, 0, args.max_iter * args.n_critic * args.multiplier)
 
     # set up data_loader
     dataset = datasets.ImageDataset(args)
@@ -116,15 +116,15 @@ def main():
     # initial mask
     mask = None
     if args.sparse:
-        decay = CosineDecay(args.death_rate, len(train_loader) * int(args.max_epoch))
+        decay = CosineDecay(args.death_rate, len(train_loader) * int(args.max_epoch*args.multiplier))
         mask = Masking(gen_optimizer, dis_optimizer, death_rate_decay=decay, args=args)
         mask.add_module(gen_net, dis_net, densityG=args.densityG, density=args.density, sparse_init=args.sparse_init)
 
     # train loop
     switch = False
-    print(len(train_loader) * int(args.max_epoch))
+    print(len(train_loader) * int(args.max_epoch) * args.multiplier)
 
-    for epoch in range(int(start_epoch), int(args.max_epoch)):
+    for epoch in range(int(start_epoch), int(args.max_epoch * args.multiplier)):
 
         lr_schedulers = (gen_scheduler, dis_scheduler) if args.lr_decay else None
         train(args, gen_net, dis_net, gen_optimizer, dis_optimizer, gen_avg_param, train_loader, epoch, writer_dict,

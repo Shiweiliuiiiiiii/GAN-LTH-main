@@ -8,7 +8,7 @@
 #SBATCH -p gpu                  # 任务运行所在的分区 (根据代码要求确定，gpu为gpu分区，gpu4为4卡gpu分区，cpu为cpu分区)
 #SBATCH -t 3-00:00:00            # 运行的最长时间 day-hour:minute:second，但是请按需设置，不要浪费过多时间，否则影响系统效率
 #SBATCH -o SNGAN_dense       # 打印输出的文件
-source /public/data2/software/software/anaconda3/bin/activate
+source /public/data2/software/software/a +-----naconda3/bin/activate
 conda activate GAN1
 
 #--------- dense training -----------------

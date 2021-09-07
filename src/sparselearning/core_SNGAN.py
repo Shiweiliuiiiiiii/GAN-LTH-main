@@ -24,6 +24,8 @@ def add_sparse_args(parser):
     parser.add_argument('--densityD', type=float, default=0.06, help='The density of D.')
     parser.add_argument('--imbalanced', action='store_true', help='Enable balanced training mode. Default: False.')
     parser.add_argument('--SEMA', action='store_true', help='Enable sparse moving average weight. Default: False.')
+    parser.add_argument('--pruning_mode', type=str, default='', help='sparse initialization')
+    parser.add_argument('--pruning_rate', type=float, default=0.95, help='pruning rate for pruning and finetuning.')
 
 def get_model_params(model):
     params = {}
@@ -189,11 +191,11 @@ class Masking(object):
 
         for name, tensor in self.G_model.named_parameters():
             if len(tensor.size()) == 4:
-                self.G_masks[name] = torch.zeros_like(tensor,  requires_grad=False).cuda()
+                self.G_masks[name] = torch.ones_like(tensor,  requires_grad=False).cuda()
 
         for name, tensor in self.D_model.named_parameters():
             if len(tensor.size()) == 4:
-                self.D_masks[name] = torch.zeros_like(tensor,  requires_grad=False).cuda()
+                self.D_masks[name] = torch.ones_like(tensor,  requires_grad=False).cuda()
 
         self.init(mode=sparse_init, density=density, densityG=densityG)
 

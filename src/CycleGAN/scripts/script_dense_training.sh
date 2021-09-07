@@ -14,7 +14,7 @@ conda activate GAN1
 # training a dense model
 for s in 0 1 2
 do
-  python train_dst.py --dataset horse2zebra --seed $seed --rand initial_weights --exp-name dense_training_seed$s
+  python train_dst.py --dataset horse2zebra --seed $s --rand initial_weights --exp-name dense_training_seed$s
 done
 
 # training a balanced sparse model

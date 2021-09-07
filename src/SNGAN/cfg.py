@@ -28,6 +28,11 @@ def parse_args():
         default=200,
         help='number of epochs of training')
     parser.add_argument(
+        '--multiplier',
+        type=int,
+        default=1,
+        help='extended times for training epochs')
+    parser.add_argument(
         '--max-iter',
         type=int,
         default=50000,

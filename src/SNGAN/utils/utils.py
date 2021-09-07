@@ -100,21 +100,25 @@ def set_log_dir(root_dir, exp_name, args):
         else:
             prefix = exp_path + '_density' + str(args.density)
 
-    os.makedirs(prefix)
+    if args.load_path:
+        prefix = os.path.join(root_dir, exp_name , str(args.pruning_rate))
+
+    if not os.path.isdir(prefix): os.makedirs(prefix)
     path_dict['prefix'] = prefix
 
     # set checkpoint path
     ckpt_path = os.path.join(prefix, 'Model')
-    os.makedirs(ckpt_path)
+    if not os.path.isdir(ckpt_path): os.makedirs(ckpt_path)
+
     path_dict['ckpt_path'] = ckpt_path
 
     log_path = os.path.join(prefix, 'Log')
-    os.makedirs(log_path)
+    if not os.path.isdir(log_path): os.makedirs(log_path)
     path_dict['log_path'] = log_path
 
     # set sample image path for fid calculation
     sample_path = os.path.join(prefix, 'Samples')
-    os.makedirs(sample_path)
+    if not os.path.isdir(sample_path): os.makedirs(sample_path)
     path_dict['sample_path'] = sample_path
 
     return path_dict
