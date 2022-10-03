@@ -24,8 +24,11 @@ def add_sparse_args(parser):
     parser.add_argument('--densityD', type=float, default=0.06, help='The density of D.')
     parser.add_argument('--imbalanced', action='store_true', help='Enable balanced training mode. Default: False.')
     parser.add_argument('--SEMA', action='store_true', help='Enable sparse moving average weight. Default: False.')
-    parser.add_argument('--pruning_mode', type=str, default='', help='sparse initialization')
     parser.add_argument('--pruning_rate', type=float, default=0.95, help='pruning rate for pruning and finetuning.')
+    # GMP
+    parser.add_argument('--sparse_mode', type=str, default='fix', help='method name: DST, GraNet, GraNet_uniform, GMP, GMO_uniform')
+    parser.add_argument('--initial_prune_time', type=float, default=0.1, help='the starting time for gradual pruning.')
+    parser.add_argument('--final_prune_time', type=float, default=0.8, help='the ending time for gradual pruning.')
 
 def get_model_params(model):
     params = {}
@@ -40,6 +43,7 @@ class CosineDecay(object):
     def __init__(self, death_rate, T_max, eta_min=0.005, last_epoch=-1):
         self.sgd = optim.SGD(torch.nn.ParameterList([torch.nn.Parameter(torch.zeros(1))]), lr=death_rate)
         self.cosine_stepper = torch.optim.lr_scheduler.CosineAnnealingLR(self.sgd, T_max, eta_min, last_epoch)
+        self.T_max = T_max
 
     def step(self):
         self.cosine_stepper.step()
@@ -102,7 +106,10 @@ class Masking(object):
         self.death_rate = death_rate
         self.steps = 0
 
-
+        if self.death_rate_decay.T_max:
+            self.total_step = self.death_rate_decay.T_max
+        self.final_prune_time = int(self.total_step * config['final_prune_time'])
+        self.initial_prune_time = int(self.total_step * config['initial_prune_time'])
         # if fix, we do not explore the sparse connectivity
         if not self.dy_mode: self.prune_every_k_steps = None
         else: self.prune_every_k_steps = args.update_frequency
@@ -138,6 +145,15 @@ class Masking(object):
                 if name not in self.D_masks: continue
                 self.D_masks[name][:] = (torch.rand(weight.shape) < self.D_density).float().data.cuda()
 
+        elif mode == 'dense' or mode == 'snip':
+            print('initialized with dense model')
+            for name, weight in self.G_model.named_parameters():
+                if name not in self.G_masks: continue
+                self.G_masks[name][:] = torch.ones_like(weight, dtype=torch.float32, requires_grad=False).cuda()
+            for name, weight in self.D_model.named_parameters():
+                if name not in self.D_masks: continue
+                self.D_masks[name][:] = torch.ones_like(weight, dtype=torch.float32, requires_grad=False).cuda()
+
         elif mode == 'ERK':
             print('initialize by ERK')
             self.ERK_initialize_G(erk_power_scale)
@@ -172,6 +188,7 @@ class Masking(object):
             self.G_optimizer.step()
             self.apply_mask()
             self.steps += 1
+
         if 'D' in explore_mode:
             self.D_optimizer.step()
             self.apply_mask()
@@ -179,11 +196,20 @@ class Masking(object):
             self.death_rate_decay.step()
             self.death_rate = self.death_rate_decay.get_dr()
 
-        if self.prune_every_k_steps is not None:
-            if self.steps % self.prune_every_k_steps == 0 and self.steps > 0 and 'G' in explore_mode:
-                self.weight_exploration(dy_mode=self.dy_mode)
+        if self.sparse_mode == 'GMP':
+            if self.steps >= self.initial_prune_time and self.steps < self.final_prune_time and self.steps % self.prune_every_k_steps == 0 and 'G' in explore_mode:
+                print('*********************************Gradual Magnitude Pruning***********************')
+                current_prune_rate = self.gradual_pruning_rate(self.steps, 0.0, 1 - self.G_density,
+                                                               self.initial_prune_time, self.final_prune_time)
+                self.gradual_magnitude_pruning(current_prune_rate)
+                self.print_status()
+        elif self.sparse_mode == 'DST':
+            if self.steps % self.prune_every_k_steps == 0:
+                print('*********************************Dynamic Sparsity********************************')
+                self.truncate_weights(dy_mode=self.dy_mode)
                 self.print_nonzero_counts(dy_mode=self.dy_mode)
-                self.fired_masks_update()
+        else:
+            pass
 
     def add_module(self, G_model, D_model, densityG=0.5 , density=0.5, sparse_init='ERK'):
         self.G_model = G_model
@@ -606,4 +632,64 @@ class Masking(object):
 
             total_nonzero += density_dict[name] * mask.numel()
         print(f"Overall sparsity of D {total_nonzero / total_params}")
+
+    def print_status(self):
+        total_size = 0
+        sparse_size = 0
+        for name, weight in self.G_model.named_parameters():
+            if name not in self.G_masks: continue
+            dense_weight_num = weight.numel()
+            sparse_weight_num = (weight != 0).sum().int().item()
+            total_size += dense_weight_num
+            sparse_size += sparse_weight_num
+            layer_density = sparse_weight_num / dense_weight_num
+            print(f'sparsity of layer {name} with tensor {weight.size()} is {1 - layer_density}')
+        print('Final sparsity level is {0}'.format(1 - sparse_size / total_size))
+
+        total_size = 0
+        sparse_size = 0
+        for name, weight in self.D_model.named_parameters():
+            if name not in self.D_masks: continue
+            dense_weight_num = weight.numel()
+            sparse_weight_num = (weight != 0).sum().int().item()
+            total_size += dense_weight_num
+            sparse_size += sparse_weight_num
+            layer_density = sparse_weight_num / dense_weight_num
+            print(f'sparsity of layer {name} with tensor {weight.size()} is {1 - layer_density}')
+        print('Final sparsity level is {0}'.format(1 - sparse_size / total_size))
+
+    def gradual_pruning_rate(self,
+                             step: int,
+                             initial_threshold: float,
+                             final_threshold: float,
+                             initial_time: int,
+                             final_time: int,
+                             ):
+        if step <= initial_time:
+            threshold = initial_threshold
+        elif step > final_time:
+            threshold = final_threshold
+        else:
+            mul_coeff = 1 - (step - initial_time) / (final_time - initial_time)
+            threshold = final_threshold + (initial_threshold - final_threshold) * (mul_coeff ** 3)
+
+        return threshold
+
+    def gradual_magnitude_pruning(self, current_pruning_rate):
+        weight_abs = []
+        for name, tensor in self.G_model.named_parameters():
+            if name not in self.G_masks: continue
+            weight_abs.append(torch.abs(tensor))
+
+        # Gather all scores in a single vector and normalise
+        all_scores = torch.cat([torch.flatten(x) for x in weight_abs])
+        num_params_to_keep = int(len(all_scores) * (1 - current_pruning_rate))
+
+        threshold, _ = torch.topk(all_scores, num_params_to_keep, sorted=True)
+        acceptable_score = threshold[-1]
+
+        for name, tensor in self.G_model.named_parameters():
+            if name not in self.G_masks: continue
+            self.G_masks[name] = ((torch.abs(tensor)) > acceptable_score).float().data.cuda()
+        self.apply_mask(apply_mode='G')
 
