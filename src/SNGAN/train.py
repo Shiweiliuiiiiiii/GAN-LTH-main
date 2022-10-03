@@ -14,8 +14,8 @@ import torch.nn as nn
 from tensorboardX import SummaryWriter
 from copy import deepcopy
 import sys
-sys.path.append('../')
-from sparselearning.core_SNGAN import Masking, CosineDecay, LinearDecay, get_model_params, set_model_params
+sys.path.append('..')
+from core_SNGAN import Masking, CosineDecay, LinearDecay, get_model_params, set_model_params
 
 
 def main():
