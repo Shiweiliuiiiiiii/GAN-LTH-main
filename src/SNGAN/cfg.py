@@ -8,7 +8,7 @@ import argparse
 import sys
 sys.path.append('..')
 import sparselearning
-from sparselearning.core import Masking, CosineDecay, LinearDecay
+from sparselearning.core_SNGAN import Masking, CosineDecay, LinearDecay
 
 
 def str2bool(v):
