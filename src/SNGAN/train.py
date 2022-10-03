@@ -2,7 +2,7 @@ import cfg
 import models
 import datasets
 import random
-from functions import train, validate, LinearLrDecay, load_params, copy_params
+from functions import train, validate, LinearLrDecay, load_params, copy_params, snip
 from utils.utils import set_log_dir, save_checkpoint, create_logger
 from utils.inception_score import _init_inception
 from utils.fid_score import create_inception_graph, check_or_download_inception
@@ -125,8 +125,11 @@ def main():
     print(len(train_loader) * int(args.max_epoch) * args.multiplier)
 
     for epoch in range(int(start_epoch), int(args.max_epoch * args.multiplier)):
-
         lr_schedulers = (gen_scheduler, dis_scheduler) if args.lr_decay else None
+        if epoch == 0 and args.sparse_init == 'snip':
+            snip(args, gen_net, dis_net, gen_optimizer, dis_optimizer, gen_avg_param, train_loader, epoch, writer_dict,
+              lr_schedulers, mask)
+
         train(args, gen_net, dis_net, gen_optimizer, dis_optimizer, gen_avg_param, train_loader, epoch, writer_dict,
               lr_schedulers, mask)
 

@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH -A test                  # 自己所属的账户 (不要改)
-#SBATCH -J sngan_DST_onlyG_densityD0.5        # 所运行的任务名称 (自己取)
+#SBATCH -J sngan_snip_onlyG_densityD0.5        # 所运行的任务名称 (自己取)
 #SBATCH -N 1                    # 占用的节点数（根据代码要求确定）
 #SBATCH --ntasks-per-node=1     # 运行的进程数（根据代码要求确定）
 #SBATCH --cpus-per-task=10      # 每个进程的CPU核数 （根据代码要求确定）
@@ -11,15 +11,15 @@
 source /home/sliu/miniconda3/etc/profile.d/conda.sh
 conda activate slak
 
-densityD=0.5
+densityD=0.3
 #--------- unbalanced gan training (DST Ggradient Drandom)-----------------
 for s in 1
 do
- for densityG in 0.05 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9
+ for densityG in 0.05 0.1 0.2
  do
-   python train.py --model sngan_cifar10 --exp-name sngan_cifar10_unbalanced_DST_onlyG_fre1000_seed$s --init-path initial_weights \
-   --sparse --imbalanced --sparse_init ERK --densityD $densityD --densityG $densityG --update_frequency 1000 \
-   --dy_mode G --SEMA --G_growth gradient --D_growth random --random_seed $s
+   python train.py --model sngan_cifar10 --exp-name sngan_cifar10_unbalanced_snip_seed$s --init-path initial_weights \
+   --sparse --imbalanced --densityD $densityD --densityG $densityG --update_frequency 1000 \
+   --dy_mode G --SEMA --G_growth gradient --D_growth random --random_seed $s --sparse_mode fix --sparse_init snip
  done
 done
 

@@ -159,6 +159,145 @@ def train(args, gen_net: nn.Module, dis_net: nn.Module, gen_optimizer, dis_optim
     writer.add_scalar('recall_epoch', sum(tps) / (sum(tps) + sum(fns) + 1e-3), global_steps)
     writer.add_scalar('accuracy_epoch', (sum(tps) + sum(tns)) / (sum(tps) + sum(tns) + sum(fps) + sum(fns) + 1e-3), global_steps)
 
+
+def snip(args, gen_net: nn.Module, dis_net: nn.Module, gen_optimizer, dis_optimizer, gen_avg_param, train_loader,
+          epoch,
+          writer_dict, schedulers=None, mask=None):
+    np.random.seed(args.random_seed + epoch ** 2)
+
+    gen_step = 0
+    global_step = 0
+    # train mode
+    gen_net = gen_net.train()
+    dis_net = dis_net.train()
+    tps = []
+    tns = []
+    fns = []
+    fps = []
+
+    gen_net.train()
+    for iter_idx, (imgs, _) in enumerate(train_loader):
+
+        # Adversarial ground truths
+        real_imgs = imgs.type(torch.cuda.FloatTensor)
+        # real_imgs = DiffAugment(real_imgs, policy="translation,cutout")
+        # Sample noise as generator input
+        z = torch.cuda.FloatTensor(np.random.normal(0, 1, (imgs.shape[0], args.latent_dim)))
+        # ---------------------
+        #  Train Discriminator
+        # ---------------------
+        dis_optimizer.zero_grad()
+
+        real_validity = dis_net(real_imgs)
+        fake_imgs = gen_net(z).detach()
+        # fake_imgs = DiffAugment(fake_imgs, policy="translation,cutout")
+
+        assert fake_imgs.size() == real_imgs.size()
+
+        fake_validity = dis_net(fake_imgs)
+
+        # cal loss
+        d_loss = torch.mean(nn.ReLU(inplace=True)(1.0 - real_validity)) + \
+                 torch.mean(nn.ReLU(inplace=True)(1 + fake_validity))
+        d_loss.backward()
+        # dis_optimizer.step()
+        # if args.sparse:
+        #     mask.step(explore_mode='D')
+        # else:
+        #     dis_optimizer.step()
+        # writer.add_scalar('d_loss', d_loss.item(), global_steps)
+
+        tp = torch.sum(real_validity > 0)
+        tn = torch.sum(fake_validity < 0)
+        fn = torch.sum(real_validity <= 0)
+        fp = torch.sum(fake_validity >= 0)
+        precision = tp / (tp + fp + 1e-3)
+        recall = tp / (tp + fn + 1e-3)
+        accuracy = (tp + tn) / (tp + fn + fp + tn)
+
+        fps.append(fp.item())
+        tps.append(tp.item())
+        fns.append(fn.item())
+        tns.append(tn.item())
+
+        # writer.add_scalar('precision', precision.item(), global_steps)
+        # writer.add_scalar('recall', recall.item(), global_steps)
+        # writer.add_scalar('accuracy', accuracy.item(), global_steps)
+        # -----------------
+        #  Train Generator
+        # -----------------
+        if global_steps % args.n_critic == 0:
+            gen_optimizer.zero_grad()
+
+            gen_z = torch.cuda.FloatTensor(np.random.normal(0, 1, (args.gen_batch_size, args.latent_dim)))
+            gen_imgs = gen_net(gen_z)
+
+            # gen_imgs = DiffAugment(gen_imgs, policy="translation,cutout")
+
+            fake_validity = dis_net(gen_imgs)
+
+            # cal loss
+            g_loss = -torch.mean(fake_validity)
+
+            g_loss.backward()
+            # gen_optimizer.step()
+            # if args.sparse:
+            #     mask.step(explore_mode='G')
+            # else:
+            #     gen_optimizer.step()
+
+
+            # writer.add_scalar('g_loss', g_loss.item(), global_steps)
+            gen_step += 1
+
+        global_step += 1
+
+        if gen_step == 1:
+            # calculate pruning score for D
+            grads_abs_D = []
+            for name, weight in dis_net.named_parameters():
+                if name not in mask.D_masks: continue
+                grads_abs_D.append(torch.abs(weight * weight.grad))
+
+            all_scores_D = torch.cat([torch.flatten(x) for x in grads_abs_D])
+
+            num_params_to_keep_D = int(len(all_scores_D) * (1 - mask.densityD))
+            threshold_D, _ = torch.topk(all_scores_D, num_params_to_keep_D + 1, sorted=True)
+            acceptable_score_D = threshold_D[-1]
+
+            snip_masks_D = []
+            for i, g in enumerate(grads_abs_D):
+                mask_ = (g > acceptable_score_D).float()
+                snip_masks_D.append(mask_)
+
+            grads_abs_G = []
+            for name, weight in gen_net.named_parameters():
+                if name not in mask.G_masks: continue
+                grads_abs_G.append(torch.abs(weight * weight.grad))
+
+            # calculate pruning score for G
+            all_scores_G = torch.cat([torch.flatten(x) for x in grads_abs_G])
+
+            num_params_to_keep_G = int(len(all_scores_G) * (1 - mask.densityG))
+            threshold_G, _ = torch.topk(all_scores_G, num_params_to_keep_G + 1, sorted=True)
+            acceptable_score_G = threshold_G[-1]
+
+            snip_masks_G = []
+            for i, g in enumerate(grads_abs_G):
+                mask_ = (g > acceptable_score_G).float()
+                snip_masks_G.append(mask_)
+
+            for snip_mask, name in zip(snip_masks_D, mask.D_masks):
+                mask.D_masks[name] = snip_mask
+
+            for snip_mask, name in zip(snip_masks_G, mask.G_masks):
+                mask.G_masks[name] = snip_mask
+
+            mask.apply_mask(apply_mode='GD')
+            mask.print_status()
+            break
+
+
 def train_kd(args, gen_net: nn.Module, dis_net: nn.Module, orig_dis_net, gen_optimizer, dis_optimizer, gen_avg_param, train_loader, epoch, writer_dict, schedulers=None):
     np.random.seed(args.random_seed + epoch ** 2)
     writer = writer_dict['writer']
