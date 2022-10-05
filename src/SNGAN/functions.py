@@ -1,8 +1,4 @@
-# -*- coding: utf-8 -*-
-# @Date    : 2019-07-25
-# @Author  : Xinyu Gong (xy_gong@tamu.edu)
-# @Link    : None
-# @Version : 0.0
+
 
 import os
 import numpy as np
@@ -261,7 +257,7 @@ def snip(args, gen_net: nn.Module, dis_net: nn.Module, gen_optimizer, dis_optimi
 
             all_scores_D = torch.cat([torch.flatten(x) for x in grads_abs_D])
 
-            num_params_to_keep_D = int(len(all_scores_D) * (1 - mask.densityD))
+            num_params_to_keep_D = int(len(all_scores_D) * (mask.densityD))
             threshold_D, _ = torch.topk(all_scores_D, num_params_to_keep_D + 1, sorted=True)
             acceptable_score_D = threshold_D[-1]
 
@@ -278,7 +274,7 @@ def snip(args, gen_net: nn.Module, dis_net: nn.Module, gen_optimizer, dis_optimi
             # calculate pruning score for G
             all_scores_G = torch.cat([torch.flatten(x) for x in grads_abs_G])
 
-            num_params_to_keep_G = int(len(all_scores_G) * (1 - mask.densityG))
+            num_params_to_keep_G = int(len(all_scores_G) * (mask.densityG))
             threshold_G, _ = torch.topk(all_scores_G, num_params_to_keep_G + 1, sorted=True)
             acceptable_score_G = threshold_G[-1]
 
