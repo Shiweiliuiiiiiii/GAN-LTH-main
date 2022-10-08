@@ -84,6 +84,7 @@ class Masking(object):
         self.redistribution_mode = redistribution
         self.death_rate_decay = death_rate_decay
         self.args = args
+        self.sparse_mode = args.sparse_mode
 
         self.G_model = None
         self.D_model = None
