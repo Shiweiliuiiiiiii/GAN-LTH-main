@@ -110,6 +110,7 @@ class Masking(object):
         if self.death_rate_decay.T_max:
             self.total_step = self.death_rate_decay.T_max
         self.final_prune_time = int(self.total_step * args.final_prune_time)
+        print(self.final_prune_time)
         self.initial_prune_time = int(self.total_step * args.initial_prune_time)
         # if fix, we do not explore the sparse connectivity
         if not self.dy_mode: self.prune_every_k_steps = None
@@ -192,7 +193,6 @@ class Masking(object):
 
         if 'D' in explore_mode:
             self.steps += 1
-            print(self.steps)
             self.D_optimizer.step()
             self.apply_mask()
             # DST decay
