@@ -108,8 +108,8 @@ class Masking(object):
 
         if self.death_rate_decay.T_max:
             self.total_step = self.death_rate_decay.T_max
-        self.final_prune_time = int(self.total_step * config['final_prune_time'])
-        self.initial_prune_time = int(self.total_step * config['initial_prune_time'])
+        self.final_prune_time = int(self.total_step * args.final_prune_time)
+        self.initial_prune_time = int(self.total_step * args.initial_prune_time)
         # if fix, we do not explore the sparse connectivity
         if not self.dy_mode: self.prune_every_k_steps = None
         else: self.prune_every_k_steps = args.update_frequency
