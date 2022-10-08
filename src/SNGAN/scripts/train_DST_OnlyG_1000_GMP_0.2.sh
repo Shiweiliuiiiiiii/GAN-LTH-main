@@ -6,7 +6,7 @@ densityD=1.0
 #--------- unbalanced gan training (DST Ggradient Drandom)-----------------
 for s in 1
 do
- for densityG in 0.05 0.1
+ for densityG in 0.2
  do
    python train.py --model sngan_cifar10 --exp-name sngan_cifar10_unbalanced_GMP_onlyG_fre5000_seed1 --init-path initial_weights \
    --sparse --imbalanced --sparse_init dense --densityD 1.0 --densityG 0.1 --update_frequency 1000 \
