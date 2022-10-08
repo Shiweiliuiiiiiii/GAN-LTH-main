@@ -15,7 +15,7 @@ from tensorboardX import SummaryWriter
 from copy import deepcopy
 import sys
 sys.path.append('..')
-from core_SNGAN import Masking, CosineDecay, LinearDecay, get_model_params, set_model_params
+from sparselearning.core_SNGAN import Masking, CosineDecay, LinearDecay, get_model_params, set_model_params
 
 
 def main():
