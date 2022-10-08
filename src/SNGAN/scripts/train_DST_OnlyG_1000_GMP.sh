@@ -9,8 +9,8 @@ do
  for densityG in 0.05 0.1 0.2
  do
    python train.py --model sngan_cifar10 --exp-name sngan_cifar10_unbalanced_GMP_onlyG_fre5000_seed1 --init-path initial_weights \
-   --sparse --imbalanced --sparse_init dense --densityD 1.0 --densityG 0.1 --update_frequency 5000 \
-   --dy_mode G --SEMA --G_growth gradient --D_growth random --random_seed 1 --sparse_mode GMP
+   --sparse --imbalanced --sparse_init dense --densityD 1.0 --densityG 0.1 --update_frequency 10 \
+   --dy_mode G --SEMA --G_growth gradient --D_growth random --random_seed 1 --sparse_mode GMP --initial_prune_time 0.0
  done
 done
 
