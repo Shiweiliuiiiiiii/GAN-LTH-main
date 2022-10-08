@@ -192,23 +192,24 @@ class Masking(object):
 
         if 'D' in explore_mode:
             self.steps += 1
+            print(self.steps)
             self.D_optimizer.step()
             self.apply_mask()
             # DST decay
             self.death_rate_decay.step()
             self.death_rate = self.death_rate_decay.get_dr()
 
-        if self.sparse_mode == 'GMP' and 'G' in explore_mode:
+        if self.sparse_mode == 'GMP':
             if self.steps >= self.initial_prune_time and self.steps < self.final_prune_time and self.steps % self.prune_every_k_steps == 0 and 'G' in explore_mode:
                 print('*********************************Gradual Magnitude Pruning***********************')
                 current_prune_rate = self.gradual_pruning_rate(self.steps, 0.0, 1 - self.G_density,
                                                                self.initial_prune_time, self.final_prune_time)
                 self.gradual_magnitude_pruning(current_prune_rate)
                 self.print_status()
-        elif self.sparse_mode == 'DST' and 'G' in explore_mode:
+        elif self.sparse_mode == 'DST':
             if self.steps % self.prune_every_k_steps == 0:
                 print('*********************************Dynamic Sparsity********************************')
-                self.truncate_weights(dy_mode=self.dy_mode)
+                self.weight_exploration(dy_mode=self.dy_mode)
                 self.print_nonzero_counts(dy_mode=self.dy_mode)
         else:
             pass
