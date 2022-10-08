@@ -116,7 +116,7 @@ def main():
     # initial mask
     mask = None
     if args.sparse:
-        decay = CosineDecay(args.death_rate, len(train_loader) * int(args.max_epoch*args.multiplier))
+        decay = CosineDecay(args.death_rate, args.max_iter)
         mask = Masking(gen_optimizer, dis_optimizer, death_rate_decay=decay, args=args)
         mask.add_module(gen_net, dis_net, densityG=args.densityG, density=args.density, sparse_init=args.sparse_init)
 
