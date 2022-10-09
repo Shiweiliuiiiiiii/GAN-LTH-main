@@ -643,7 +643,7 @@ def validate(args, fixed_z, fid_stat, gen_net: nn.Module, writer_dict, epoch):
 
     # get fid and inception score
     fid_buffer_dir = os.path.join(args.path_helper['sample_path'], 'fid_buffer')
-    os.makedirs(fid_buffer_dir, exist_ok = False)
+    os.makedirs(fid_buffer_dir, exist_ok = True)
 
     eval_iter = args.num_eval_imgs // args.eval_batch_size
     img_list = list()
