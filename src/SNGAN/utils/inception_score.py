@@ -9,8 +9,7 @@ import tarfile
 
 import numpy as np
 from six.moves import urllib
-import tensorflow.compat.v1 as tf
-tf.disable_v2_behavior()
+import tensorflow as tf
 
 import math
 import sys

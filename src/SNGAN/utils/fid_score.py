@@ -18,8 +18,7 @@ See --help to see further details.
 from __future__ import absolute_import, division, print_function
 import numpy as np
 import os
-import tensorflow.compat.v1 as tf
-tf.disable_v2_behavior()
+import tensorflow as tf
 # from scipy.misc import imread
 from skimage.io import imread
 from scipy import linalg
